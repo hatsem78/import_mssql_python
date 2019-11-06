@@ -2,48 +2,40 @@ import sqlalchemy
 from sqlalchemy import Column, Integer, String, Numeric
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
-from config import Config
+from lib.class_base import ClaseBase
+from model.facebook import FacebookAds
+import json
+import pandas as pd
 
 
-algo = Config()
-algo.create_engine()
-# Declaration of the class in order to write into the database. This structure is standard and should align with SQLAlchemy's doc.s
-
-'''
-class Current(Base):
-    __tablename__ = 'tableName'
-
-    id = Column(Integer, primary_key=True)
-    Date = Column(String(500))
-    Type = Column(String(500))
-    Value = Column(Numeric())
-
-    def __repr__(self):
-        return "(id='%s', Date='%s', Type='%s', Value='%s')" % (self.id, self.Date, self.Type, self.Value)
+connection = ClaseBase()
+connection.create_engine()
 
 
-# Set up of the table in db and the file to import
-fileToRead = 'file.csv'
-tableToWriteTo = 'tableName'
+# ================= Import data FacebookAds =====================
 
-# Panda to create a lovely dataframe
-df_to_be_written = pd.read_csv(fileToRead)
-# The orient='records' is the key of this, it allows to align with the format mentioned in the doc to insert in bulks.
-listToWrite = df_to_be_written.to_dict(orient='records')
+# create table if not EXISTS
+connection.create_table(FacebookAds)
 
-metadata = sqlalchemy.schema.MetaData(bind=engine, reflect=True)
-table = sqlalchemy.Table(tableToWriteTo, metadata, autoload=True)
+# Only important column
+columns = ['account_currency', 'account_id', 'account_name',
+           'campaign_id', 'campaign_name', 'clicks', 'cpc', 'cpm', 'ctr',
+           'date_start', 'date_stop',
+           'hourly_stats_aggregated_by_advertiser_time_zone', 'impressions']
+df = pd.read_csv("csv/FB_Ads.csv",
+                 sep=',', encoding='latin1',
+                 usecols=columns,
+                 nrows=300
+                 )
 
-# Open the session
-Session = sessionmaker(bind=engine)
-session = Session()
+df['hourly_start_aggregated_by_advertiser_time_zone'] = df['hourly_stats_aggregated_by_advertiser_time_zone'].str.split(
+    '-').apply(lambda x: x[0].strip())
+df['hourly_end_aggregated_by_advertiser_time_zone'] = df['hourly_stats_aggregated_by_advertiser_time_zone'].str.split(
+    '-').apply(lambda x: x[1].strip())
 
-# Inser the dataframe into the database in one bulk
-conn.execute(table.insert(), listToWrite)
+rows = df.to_json(orient='records')
 
-# Commit the changes
-session.commit()
+rows = json.loads(rows)
 
-# Close the session
-session.close()
-'''
+#Insert data in table facebook_ads
+connection.set_bulk_insert(rows, FacebookAds)
